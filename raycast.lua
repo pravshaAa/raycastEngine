@@ -126,7 +126,7 @@ function DrawRays3D()
         love.graphics.setColor(1, 0, 0)
         love.graphics.setLineWidth(1)
         love.graphics.line(Player.x + Player.width/2, Player.y + Player.height/2, 
-                          finalRx, finalRy)
+        finalRx, finalRy)
         
         -- 3д сцена
         local ca = Player.a - ra
