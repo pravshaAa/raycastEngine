@@ -1,12 +1,23 @@
 require"player"
 require"map"
 
-local DR = 0.0174533
+local XRender3D = 512
+local Width3D = 512
+local FOV = 60
+local Height3D = 512
+local MapTileSize = 64
+local MaxLength = 500
+local detail = 5
+
+local DR = 0.0174533 / detail
+local HalfHeight3D = Height3D / 2
+local LineWidth = Width3D / FOV / detail + 0.5
+local MaxDof = math.max(mapX, mapY)
 
 function DrawRays3D()
-    local ra = Player.a - DR * 30  
+    local ra = Player.a - DR * (FOV/2) * detail
     
-    for r = 1, 60 do
+    for r = 1, FOV * detail do
         if ra < 0 then
             ra = ra + 2 * math.pi
         end
@@ -25,24 +36,24 @@ function DrawRays3D()
         local rxH, ryH, xoH, yoH = 0, 0, 0, 0
         
         if ra > math.pi then -- Вверх
-            ryH = (math.floor(Player.y / 64) * 64) - 0.0001
+            ryH = (math.floor(Player.y / MapTileSize) * MapTileSize) - 0.0001
             rxH = (Player.y - ryH) * aTan + Player.x
-            yoH = -64
+            yoH = -MapTileSize
             xoH = -yoH * aTan
         elseif ra < math.pi then -- Вниз
-            ryH = (math.floor(Player.y / 64) * 64) + 64
+            ryH = (math.floor(Player.y / MapTileSize) * MapTileSize) + MapTileSize
             rxH = (Player.y - ryH) * aTan + Player.x
-            yoH = 64
+            yoH = MapTileSize
             xoH = -yoH * aTan
         else
             rxH = Player.x
             ryH = Player.y
-            dofH = 8
+            dofH = MaxDof
         end
         
-        while dofH < 8 do
-            local mx = math.floor(rxH / 64)
-            local my = math.floor(ryH / 64)
+        while dofH < MaxDof do
+            local mx = math.floor(rxH / MapTileSize)
+            local my = math.floor(ryH / MapTileSize)
             local mp = my * mapX + mx + 1
             
             if mp > 0 and mp <= mapX * mapY and map[mp] == 1 then
@@ -50,7 +61,7 @@ function DrawRays3D()
                 hRy = ryH
                 hHit = true
                 hDist = math.sqrt((Player.x - hRx)^2 + (Player.y - hRy)^2)
-                dofH = 8
+                dofH = MaxDof
             else
                 rxH = rxH + xoH
                 ryH = ryH + yoH
@@ -64,26 +75,26 @@ function DrawRays3D()
         local rxV, ryV, xoV, yoV = 0, 0, 0, 0
         
         if ra > math.pi/2 and ra < 3*math.pi/2 then -- Лево
-            rxV = (math.floor(Player.x / 64) * 64) - 0.0001
+            rxV = (math.floor(Player.x / MapTileSize) * MapTileSize) - 0.0001
             ryV = (Player.x - rxV) * nTan + Player.y
-            xoV = -64
+            xoV = -MapTileSize
             yoV = -xoV * nTan
         elseif ra < math.pi/2 or ra > 3*math.pi/2 then -- Право
-            rxV = (math.floor(Player.x / 64) * 64) + 64
+            rxV = (math.floor(Player.x / MapTileSize) * MapTileSize) + MapTileSize
             ryV = (Player.x - rxV) * nTan + Player.y
-            xoV = 64
+            xoV = MapTileSize
             yoV = -xoV * nTan
         end
         
         if ra == 0 or ra == math.pi then
             rxV = Player.x
             ryV = Player.y
-            dofV = 8
+            dofV = MaxDof
         end
         
-        while dofV < 8 do
-            local mx = math.floor(rxV / 64)
-            local my = math.floor(ryV / 64)
+        while dofV < MaxDof do
+            local mx = math.floor(rxV / MapTileSize)
+            local my = math.floor(ryV / MapTileSize)
             local mp = my * mapX + mx + 1
             
             if mp > 0 and mp <= mapX * mapY and map[mp] == 1 then
@@ -91,7 +102,7 @@ function DrawRays3D()
                 vRy = ryV
                 vHit = true
                 vDist = math.sqrt((Player.x - vRx)^2 + (Player.y - vRy)^2)
-                dofV = 8
+                dofV = MaxDof
             else
                 rxV = rxV + xoV
                 ryV = ryV + yoV
@@ -117,16 +128,21 @@ function DrawRays3D()
             finalRx, finalRy, finalDist = vRx, vRy, vDist
             wallColor = {0.6, 0.6, 0.6}
         else
-            finalRx = Player.x + math.cos(ra) * 500
-            finalRy = Player.y + math.sin(ra) * 500
-            finalDist = 500
+            finalRx = Player.x + math.cos(ra) * MaxLength
+            finalRy = Player.y + math.sin(ra) * MaxLength
+            finalDist = MaxLength
             wallColor = {0.8, 0.8, 0.8}
         end
         
+        -- Отрисовка лучей (2д вид)
         love.graphics.setColor(1, 0, 0)
         love.graphics.setLineWidth(1)
-        love.graphics.line(Player.x + Player.width/2, Player.y + Player.height/2, 
-        finalRx, finalRy)
+        love.graphics.line(
+            Player.x + Player.width/2, 
+            Player.y + Player.height/2, 
+            finalRx, 
+            finalRy
+        )
         
         -- 3д сцена
         local ca = Player.a - ra
@@ -145,18 +161,25 @@ function DrawRays3D()
             finalDist = 1
         end
         
-        local lineH = (mapS * 512) / finalDist
-        local lineO = 256 - lineH / 2
+        local lineH = (MapTileSize * XRender3D) / finalDist
+        local lineO = HalfHeight3D - lineH / 2
         
-        if lineH > 1024 then 
-            lineH = 1024 
-			lineO = 256 - 512
+        if lineH > Height3D * 2 then 
+            lineH = Height3D * 2
+            lineO = HalfHeight3D - Height3D
         end
         
-        local lineX = r * (512 / 60)
+        local lineX = r * (Width3D / (FOV * detail))
+        
+        -- Отрисовка 3д стены
         love.graphics.setColor(wallColor[1], wallColor[2], wallColor[3])
-        love.graphics.setLineWidth(512 / 60 + 0.5)
-        love.graphics.line(lineX + 512, lineO, lineX + 512, lineH + lineO)
+        love.graphics.setLineWidth(LineWidth)
+        love.graphics.line(
+            lineX + XRender3D, 
+            lineO, 
+            lineX + XRender3D, 
+            lineH + lineO
+        )
         
         ra = ra + DR
     end
